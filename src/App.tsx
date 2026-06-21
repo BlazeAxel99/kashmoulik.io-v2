@@ -13,6 +13,12 @@ import {
 } from 'lucide-react';
 import ThreeCanvas from './components/ThreeCanvas';
 import ArchitectureDiagram from './components/ArchitectureDiagram';
+import CustomCursor from './components/CustomCursor';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import Lenis from 'lenis';
+
+gsap.registerPlugin(ScrollTrigger);
 
 // ==========================================
 // 1. Cyberpunk Text Decryptor Effect
@@ -23,7 +29,7 @@ const DecryptText = ({ text }: { text: string }) => {
   useEffect(() => {
     let iteration = 0;
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+";
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | undefined = undefined;
 
     interval = setInterval(() => {
       setDisplayText(
@@ -45,10 +51,12 @@ const DecryptText = ({ text }: { text: string }) => {
       iteration += 1 / 2;
     }, 25);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [text]);
 
-  return <span>{displayText}</span>;
+  return <>{displayText}</>;
 };
 
 // ==========================================
@@ -57,21 +65,137 @@ const DecryptText = ({ text }: { text: string }) => {
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // 1. Lenis Inertial Scrolling Integration & GSAP Synchronization
   useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // standard expo out
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+    });
+
+    // Connect ScrollTrigger to Lenis scroll updates
+    lenis.on('scroll', () => {
+      ScrollTrigger.update();
+    });
+
+    // Native requestAnimationFrame loop for Lenis (preserves absolute browser timestamps)
+    let animationId: number;
+    function raf(time: number) {
+      lenis.raf(time);
+      animationId = requestAnimationFrame(raf);
+    }
+    animationId = requestAnimationFrame(raf);
+
+    // Sync scroll progress and pixel offset via Lenis callback
     const handleScroll = () => {
-      const scrollTop = window.scrollY;
+      const scrollTop = lenis.scroll;
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      setScrollProgress(docHeight > 0 ? (scrollTop / docHeight) * 100 : 0);
+      const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      setScrollProgress(progress);
+      setScrollOffset(scrollTop);
       setNavScrolled(scrollTop > 50);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+
+    lenis.on('scroll', handleScroll);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      lenis.destroy();
+    };
+  }, []);
+
+  // 2. GSAP ScrollTrigger Content Choreography
+  useEffect(() => {
+    // --- Hero Entrance Animations ---
+    // Use fromTo() for guaranteed start+end state (works correctly in React StrictMode)
+    gsap.fromTo('.hero-badge',
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out', delay: 0.15, clearProps: 'all' }
+    );
+
+    // Simple fade+slide for hero title lines — no yPercent clip trick
+    gsap.fromTo('.hero-line',
+      { opacity: 0, y: 24 },
+      { opacity: 1, y: 0, duration: 0.85, ease: 'power3.out', stagger: 0.12, delay: 0.25, clearProps: 'all' }
+    );
+
+    gsap.fromTo('.hero-description',
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out', delay: 0.5, clearProps: 'all' }
+    );
+
+    gsap.fromTo('.hero-ctas',
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out', delay: 0.62, clearProps: 'all' }
+    );
+
+    // --- Bento Staggered Reveal ---
+    gsap.fromTo('.bento-card',
+      { opacity: 0, y: 40 },
+      {
+        opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.08, clearProps: 'all',
+        scrollTrigger: { trigger: '.bento-grid', start: 'top 85%' }
+      }
+    );
+
+    // --- Featured Work Rows ---
+    const workItems = gsap.utils.toArray('.work-item');
+    workItems.forEach((item) => {
+      const element = item as HTMLElement;
+      const isReverse = element.classList.contains('reverse');
+
+      gsap.fromTo(element.querySelector('.work-content'),
+        { opacity: 0, x: isReverse ? 50 : -50 },
+        {
+          opacity: 1, x: 0, duration: 0.9, ease: 'power3.out', clearProps: 'all',
+          scrollTrigger: { trigger: element, start: 'top 80%' }
+        }
+      );
+      gsap.fromTo(element.querySelector('.work-diagram-container'),
+        { opacity: 0, x: isReverse ? -50 : 50 },
+        {
+          opacity: 1, x: 0, duration: 0.9, ease: 'power3.out', clearProps: 'all',
+          scrollTrigger: { trigger: element, start: 'top 80%' }
+        }
+      );
+    });
+
+    // --- Timeline Cards Reveal ---
+    gsap.fromTo('.timeline-item',
+      { opacity: 0, y: 50 },
+      {
+        opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.15, clearProps: 'all',
+        scrollTrigger: { trigger: '.timeline-flow', start: 'top 80%' }
+      }
+    );
+
+    // --- Marquee Reveal ---
+    gsap.fromTo('.marquee-container',
+      { opacity: 0, y: 30 },
+      {
+        opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', clearProps: 'all',
+        scrollTrigger: { trigger: '.certifications-section', start: 'top 85%' }
+      }
+    );
+
+    // Refresh ScrollTrigger after layout settles
+    const refreshTimer = setTimeout(() => {
+      ScrollTrigger.refresh();
+    }, 800);
+
+    return () => {
+      clearTimeout(refreshTimer);
+      ScrollTrigger.getAll().forEach(trigger => trigger.kill());
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -99,6 +223,12 @@ export default function App() {
         <div className="aurora-blob aurora-blob-3" />
       </div>
 
+      {/* Premium Magnetic Cursor */}
+      <CustomCursor />
+
+      {/* Persistent WebGL Background */}
+      <ThreeCanvas scrollOffset={scrollOffset} theme={theme} />
+
       <div className="portfolio-root">
         {/* Scroll Progress Bar */}
         <div className="scroll-progress" style={{ width: `${scrollProgress}%` }} />
@@ -111,7 +241,7 @@ export default function App() {
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <a 
-              href="/kashmoulik.io/Kash_Moulik_Resume.pdf" 
+              href="/kashmoulik.io-v2/Kash_Moulik_Resume.pdf" 
               download="Kash_Moulik_Resume.pdf"
               className="escape-hatch-btn"
             >
@@ -123,19 +253,15 @@ export default function App() {
         {/* Hero Section */}
         <section className="hero-section">
           <div className="hero-canvas-bg">
-            <ThreeCanvas />
           </div>
           <div className="hero-wrapper">
-            <motion.div 
-              className="hero-info"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
+            <div className="hero-info">
               <span className="hero-badge">AI Systems & Agents</span>
               <h1 className="hero-title">
-                Hi, I'm <br />
-                <span className="text-gradient"><DecryptText text="Kash Moulik" /></span>
+                <span className="hero-line" style={{ display: 'block' }}>Hi, I'm</span>
+                <span className="hero-line text-gradient" style={{ display: 'block' }}>
+                  <DecryptText text="Kash Moulik" />
+                </span>
               </h1>
               <p className="hero-description">
                 Assistant Manager of AI Engineering at EY with 4+ years of experience. I design and build production-grade Multi-Agent workflows, Model Context Protocol (MCP) servers, and enterprise automation pipelines.
@@ -148,7 +274,7 @@ export default function App() {
                   <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style={{ marginRight: '6px' }}><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482C19.138 20.164 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg> GitHub Profile
                 </a>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 

@@ -45,7 +45,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  /* scroll-behavior: smooth removed to prevent conflict with Lenis */
 }
 
 body {
@@ -75,7 +75,7 @@ body {
 .aurora-container {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: -1;
   overflow: hidden;
   pointer-events: none;
 }
@@ -122,6 +122,12 @@ body {
   0% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(8%, -6%) scale(1.1); }
   100% { transform: translate(-5%, 8%) scale(0.95); }
+}
+
+/* Root container — content sits above fixed WebGL canvas */
+.portfolio-root-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* Layout */
@@ -257,6 +263,7 @@ section {
 
 /* Glassmorphism Cards */
 .glass-panel {
+  position: relative;
   background: var(--bg-card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -266,10 +273,41 @@ section {
   transition: var(--transition-premium);
 }
 
+/* Trace Border Glow Effect */
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  padding: 1px; /* border thickness */
+  background: linear-gradient(135deg, transparent 35%, var(--accent-cyan) 50%, var(--accent-purple) 65%, transparent 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background-size: 200% 200%;
+  background-position: 0% 0%;
+  z-index: 2;
+}
+
 .glass-panel:hover {
-  border-color: var(--border-hover);
+  border-color: transparent;
   background: var(--bg-card-hover);
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45), 
+              0 0 25px color-mix(in srgb, var(--accent-cyan) 8%, transparent);
+}
+
+.glass-panel:hover::before {
+  opacity: 1;
+  animation: borderGlowFlow 4s linear infinite;
+}
+
+@keyframes borderGlowFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* ============================================
@@ -326,6 +364,9 @@ section {
   line-height: 1.05;
   letter-spacing: -0.035em;
   margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .text-gradient {
@@ -826,5 +867,29 @@ section {
 
   .section-title {
     font-size: 1.75rem;
+  }
+}
+
+/* WebGL Canvas Container — sits above aurora, below all content */
+.three-canvas-container {
+  position: fixed !important;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Active WebGL Card overlay background transparency */
+.work-diagram-container.webgl-active {
+  background: transparent !important;
+}
+
+/* Custom Cursor Hide Native Rules */
+@media (hover: hover) and (pointer: fine) {
+  body.custom-cursor-active,
+  body.custom-cursor-active * {
+    cursor: none !important;
   }
 }
